@@ -1,0 +1,20 @@
+{
+	"AutoRestore": true,
+	"GameProcesses": [
+		"csgo.exe",
+		"hl2.exe",
+		"hl.exe",
+		"Pirates!.exe"
+	],
+	"ProcessesToKillOnce": [
+		"Widgets.exe",
+		"msedgewebview2.exe"
+	],
+	"ProcessesToKill": [
+		"explorer.exe",
+		"Rainmeter.exe",
+		"TrafficMonitor.exe",
+		"ElevenClock.exe",
+		"ModernFlyoutsHost.exe"
+	]
+}

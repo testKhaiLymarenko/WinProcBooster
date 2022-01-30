@@ -1,10 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/shirou/gopsutil/v3/process"
 )
@@ -23,6 +23,24 @@ import (
 //Next MessageBox shows up asking if user wants to restore (must be optional -> automatic in .ini)
 //user can edit file any moment -> check hash file if there are changes -> check
 
+//program is WinMain
+//ini -> json
+//csgo cpu usage statistics
+//msbox new ui
+//hourboostr minimizer
+//ask if user wants to close program if duplicate is running
+//if steam is running in -no-browser then in several seconds close hourboostr
+//restore in background hourboostr if steam is closed or if idle for 20 minutes
+//log data only if 5+ session
+//Windows sounds when error, kill app or success
+
+type Settings struct {
+	AutoRestore         bool
+	GameProcesses       []string
+	ProcessesToKillOnce []string
+	ProcessesToKill     []string
+}
+
 func main() {
 	var err error
 
@@ -35,76 +53,73 @@ func main() {
 		fmt.Scanln()
 	}()
 
-	settingsFile, statFile, err := workFiles()
+	/*var s Settings
+
+	s.AutoRestore = true
+	s.GameProcesses = []string{"csgo.exe", "hl2.exe", "hl.exe", "Pirates!.exe"}
+	s.ProcessesToKill = []string{"explorer.exe", "Rainmeter.exe", "TrafficMonitor.exe", "ElevenClock.exe", "ModernFlyoutsHost.exe"}
+	s.ProcessesToKillOnce = []string{"Widgets.exe", "msedgewebview2.exe"}
+
+	b, _ := json.MarshalIndent(s, "", "\t")
+
+	f, _ := os.Create("test.json")
+	f.Write(b)
+	f.Close()*/
+
+	settingsFilePath, statFilePath, err := workFiles()
 	if err != nil {
 		return
 	}
 
-	_ = statFile
+	_ = statFilePath
 
-	gameProcs, err := gameProcs(settingsFile)
+	b, err := ioutil.ReadFile(settingsFilePath)
+	if err != nil {
+		err = fmt.Errorf("failed to read %s, error: %v", settingsFilePath, err)
+	}
+
+	var settings Settings
+	err = json.Unmarshal(b, &settings)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	inGame, err := isPlaying(settings.GameProcesses)
 	if err != nil {
 		return
 	}
 
-	isPlaying, err := isInGame(gameProcs)
-	if err != nil {
-		return
-	}
+	_ = inGame
 
-	_ = isPlaying
+	fmt.Println(inGame)
 }
 
-func workFiles() (ini, log string, err error) {
+func workFiles() (settings, statistic string, err error) {
 	pwd, err := os.Getwd()
 	if err != nil {
 		err = fmt.Errorf("failed to get directory of this program running in | error: %v", err)
 	}
 
-	ini = pwd + "\\wpb_settings.ini"
-	log = pwd + "\\wpb_settings.log"
+	settings = pwd + "\\wpb_settings.json"
+	statistic = pwd + "\\wpb_settings.log"
 
 	return
 }
 
-func gameProcs(filePath string) ([]string, error) {
-	b, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read %s, error: %v", filePath, err)
-	}
-
-	//find "Game processes: "
-
-	procsBuff := strings.Split(string(b), ",")
-	var procs []string
-
-	for _, pb := range procsBuff {
-		if pb != "" && !strings.Contains(pb, ".exe") {
-			procs = append(procs, pb)
-		}
-	}
-
-	if procs == nil {
-		return nil, fmt.Errorf("inappropriate game process names. Be sure it ends with '.exe'")
-	}
-
-	return procs, nil
-}
-
-func isInGame(names []string) (bool, error) {
+func isPlaying(gameProcNames []string) (bool, error) {
 	processes, err := process.Processes()
 	if err != nil {
 		return false, fmt.Errorf("failed to obtain Windows processes list | error: %v", err)
 	}
 
-	for _, p := range processes {
-		n, err := p.Name()
+	for _, proc := range processes {
+		name, err := proc.Name()
 		if err != nil {
 			return false, fmt.Errorf("failed to obtain process name | error: %v", err)
 		}
 
-		for _, name := range names {
-			if n == name {
+		for _, gpName := range gameProcNames {
+			if name == gpName {
 				return true, nil
 			}
 		}
@@ -113,23 +128,27 @@ func isInGame(names []string) (bool, error) {
 	return false, nil
 }
 
-func killProcs(names []string) error {
+func killProcs(procNames []string) error {
 	processes, err := process.Processes()
 	if err != nil {
 		return fmt.Errorf("failed to obtain Windows processes list | error: %v", err)
 	}
 
-	for _, p := range processes {
-		n, err := p.Name()
+	for _, proc := range processes {
+		n, err := proc.Name()
 		if err != nil {
 			return fmt.Errorf("failed to obtain process name | error: %v", err)
 		}
 
-		for _, name := range names {
+		for _, name := range procNames {
 			if n == name {
-				return p.Kill()
+				if err := proc.Kill(); err != nil {
+					return fmt.Errorf("failed to kill process %s | error: %v", name, err)
+				}
 			}
 		}
 	}
-	return fmt.Errorf("process not found")
+
+	return nil
+	//return fmt.Errorf("process not found")
 }
